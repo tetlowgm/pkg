@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 
+#include <assert.h>
 #include <fcntl.h>
 
 #include <openssl/err.h>
@@ -66,6 +67,8 @@ _load_private_key(struct mldsa_sign_ctx *keyinfo)
 		fclose(fp);
 		return (EPKG_FATAL);
 	}
+
+	pkg_dbg(PKG_DBG_VERIFY, 1, "loaded priv key: %s", keyinfo->sctx.path);
 
 	fclose(fp);
 	return (EPKG_OK);
@@ -106,75 +109,62 @@ struct mldsa_verify_cbdata {
 };
 
 static int
-mldsa_verify_cert_cb(int fd, void *ud)
+mldsa_verify_cb(int fd, void *ud)
 {
-#if 0
 	struct mldsa_verify_cbdata *cbdata = ud;
 	char *sha512;
-	char *hash;
 	char errbuf[1024];
 	EVP_PKEY *pkey = NULL;
 	EVP_PKEY_CTX *ctx;
+	EVP_SIGNATURE *sig_alg;
 	int ret;
 
 	sha512 = pkg_checksum_fd(fd, PKG_HASH_TYPE_SHA512_HEX);
 	if (sha512 == NULL)
 		return (EPKG_FATAL);
 
-	hash = pkg_checksum_data(sha512, strlen(sha512),
-	    PKG_HASH_TYPE_SHA512_RAW);
-	free(sha512);
+	pkg_dbg(PKG_DBG_VERIFY, 1, "verify sha512=\"%s\"", sha512);
 
 	pkey = _load_public_key_buf(cbdata->key, cbdata->keylen);
 	if (pkey == NULL) {
-		free(hash);
+		pkg_dbg(PKG_DBG_VERIFY, 1, "cannot load key");
+		free(sha512);
 		return (EPKG_FATAL);
 	}
 
-	if (EVP_PKEY_id(pkey) != EVP_PKEY_RSA) {
-		EVP_PKEY_free(pkey);
-		free(hash);
-		return (EPKG_FATAL);
-	}
-
-	ctx = EVP_PKEY_CTX_new(pkey, NULL);
+	ctx = EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL);
 	if (ctx == NULL) {
+		pkg_dbg(PKG_DBG_VERIFY, 1, "cannot init context");
 		EVP_PKEY_free(pkey);
-		free(hash);
+		free(sha512);
 		return (EPKG_FATAL);
 	}
 
-	if (EVP_PKEY_verify_init(ctx) <= 0) {
+	/* Specifying the algo here ensures we are using ML-DSA-87 */
+	sig_alg = EVP_SIGNATURE_fetch(NULL, "ML-DSA-87", NULL);
+	if (sig_alg == NULL) {
+		EVP_PKEY_free(pkey);
+		free(sha512);
+		return (EPKG_FATAL);
+	}
+
+	if (EVP_PKEY_verify_message_init(ctx, sig_alg, NULL) <= 0) {
+		pkg_dbg(PKG_DBG_VERIFY, 1, "cannot init verify: %s", ERR_error_string(ERR_get_error(), errbuf));
 		EVP_PKEY_CTX_free(ctx);
 		EVP_PKEY_free(pkey);
-		free(hash);
+		free(sha512);
 		return (EPKG_FATAL);
 	}
 
-	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		free(hash);
-		return (EPKG_FATAL);
-	}
-
-	if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha512()) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		free(hash);
-		return (EPKG_FATAL);
-	}
-
-	ret = EVP_PKEY_verify(ctx, cbdata->sig, cbdata->siglen, hash,
-	    pkg_checksum_type_size(PKG_HASH_TYPE_SHA512_RAW));
-	free(hash);
-	if (ret <= 0 && cbdata->verbose) {
-		if (ret < 0)
-			pkg_dbg(PKG_DBG_VERIFY, 1, "rsa verify failed: %s",
-					ERR_error_string(ERR_get_error(), errbuf));
-		pkg_emit_error("signature verification failure");
-	}
+	ret = EVP_PKEY_verify(ctx, cbdata->sig, cbdata->siglen, sha512,
+	    pkg_checksum_type_size(PKG_HASH_TYPE_SHA512_HEX) - 1);
+	free(sha512);
 	if (ret <= 0) {
+		if (ret < 0)
+			pkg_dbg(PKG_DBG_VERIFY, 1, "%s: %s", cbdata->key,
+				ERR_error_string(ERR_get_error(), errbuf));
+		pkg_emit_error("%s: signature verification failure",
+		    cbdata->key);
 		EVP_PKEY_CTX_free(ctx);
 		EVP_PKEY_free(pkey);
 		return (EPKG_FATAL);
@@ -182,7 +172,6 @@ mldsa_verify_cert_cb(int fd, void *ud)
 
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
-#endif /* 0 */
 
 	return (EPKG_OK);
 }
@@ -203,87 +192,11 @@ mldsa_verify_cert(const struct pkgsign_ctx *sctx __unused, unsigned char *key,
 	cbdata.siglen = siglen;
 	cbdata.verbose = true;
 
-	ret = pkg_emit_sandbox_call(mldsa_verify_cert_cb, fd, &cbdata);
+	ret = pkg_emit_sandbox_call(mldsa_verify_cb, fd, &cbdata);
 	if (need_close)
 		close(fd);
 
 	return (ret);
-}
-
-static int
-mldsa_verify_cb(int fd, void *ud)
-{
-#if 0
-	struct mldsa_verify_cbdata *cbdata = ud;
-	char *sha512;
-	char errbuf[1024];
-	EVP_PKEY *pkey = NULL;
-	EVP_PKEY_CTX *ctx;
-	int ret;
-
-	sha512 = pkg_checksum_fd(fd, PKG_HASH_TYPE_SHA512_HEX);
-	if (sha512 == NULL)
-		return (EPKG_FATAL);
-
-	pkey = _load_public_key_buf(cbdata->key, cbdata->keylen);
-	if (pkey == NULL) {
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	if (EVP_PKEY_id(pkey) != EVP_PKEY_RSA) {
-		EVP_PKEY_free(pkey);
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	ctx = EVP_PKEY_CTX_new(pkey, NULL);
-	if (ctx == NULL) {
-		EVP_PKEY_free(pkey);
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	if (EVP_PKEY_verify_init(ctx) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_md_pkg_sha1()) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		free(sha512);
-		return (EPKG_FATAL);
-	}
-
-	ret = EVP_PKEY_verify(ctx, cbdata->sig, cbdata->siglen, sha512,
-	    pkg_checksum_type_size(PKG_HASH_TYPE_SHA512_HEX));
-	free(sha512);
-	if (ret <= 0) {
-		if (ret < 0)
-			pkg_dbg(PKG_DBG_VERIFY, 1, "%s: %s", cbdata->key,
-				ERR_error_string(ERR_get_error(), errbuf));
-		pkg_emit_error("%s: signature verification failure",
-		    cbdata->key);
-		EVP_PKEY_CTX_free(ctx);
-		EVP_PKEY_free(pkey);
-		return (EPKG_FATAL);
-	}
-
-	EVP_PKEY_CTX_free(ctx);
-	EVP_PKEY_free(pkey);
-
-#endif /* 0 */
-	return (EPKG_OK);
 }
 
 static int
@@ -303,30 +216,15 @@ mldsa_verify(const struct pkgsign_ctx *sctx __unused, const char *keypath,
 
 	(void)lseek(fd, 0, SEEK_SET);
 
-	/*
-	 * XXX Older versions of pkg write out the NUL terminator of the
-	 * signature, so we shim it out here to avoid breaking compatibility.
-	 * We can't do it at a lower level in the caller, because other signers
-	 * may use a binary format that could legitimately contain a nul byte.
-	 */
-	if (sig[sig_len - 1] == '\0')
-		sig_len--;
-
 	cbdata.key = key_buf;
 	cbdata.keylen = key_len;
 	cbdata.sig = sig;
 	cbdata.siglen = sig_len;
 	cbdata.verbose = false;
 
-	ret = pkg_emit_sandbox_call(mldsa_verify_cert_cb, fd, &cbdata);
+	ret = pkg_emit_sandbox_call(mldsa_verify_cb, fd, &cbdata);
 	if (need_close)
 		close(fd);
-	if (ret != EPKG_OK) {
-		cbdata.verbose = true;
-		(void)lseek(fd, 0, SEEK_SET);
-		ret = pkg_emit_sandbox_call(mldsa_verify_cb, fd, &cbdata);
-	}
-
 	free(key_buf);
 
 	return (ret);
@@ -510,6 +408,13 @@ mldsa_pubkey(struct pkgsign_ctx *sctx, char **pubkey, size_t *pubkeylen)
 	return (EPKG_OK);
 }
 
+static pkg_checksum_type_t
+mldsa_get_digest(struct pkgsign_ctx *sctx __unused)
+{
+
+	return(PKG_HASH_TYPE_SHA512_HEX);
+}
+
 static int
 mldsa_new(const char *name __unused, struct pkgsign_ctx *sctx __unused)
 {
@@ -540,5 +445,7 @@ const struct pkgsign_ops pkgsign_mldsa = {
 	.pkgsign_generate = mldsa_generate,
 	.pkgsign_pubkey = mldsa_pubkey,
 	.pkgsign_sign_data = mldsa_sign_data,
+
+	.pkgsign_get_digest = mldsa_get_digest,
 };
 #endif	/* OPENSSL_VERSION_NUMBER >= 0x30500000L */
