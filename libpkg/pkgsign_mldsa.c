@@ -34,7 +34,8 @@
 #include <fcntl.h>
 
 #include <openssl/err.h>
-#include <openssl/ssl.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 #include "pkg.h"
 #include "private/event.h"
@@ -107,6 +108,7 @@ struct mldsa_verify_cbdata {
 static int
 mldsa_verify_cert_cb(int fd, void *ud)
 {
+#if 0
 	struct mldsa_verify_cbdata *cbdata = ud;
 	char *sha512;
 	char *hash;
@@ -180,6 +182,7 @@ mldsa_verify_cert_cb(int fd, void *ud)
 
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
+#endif /* 0 */
 
 	return (EPKG_OK);
 }
@@ -200,10 +203,6 @@ mldsa_verify_cert(const struct pkgsign_ctx *sctx __unused, unsigned char *key,
 	cbdata.siglen = siglen;
 	cbdata.verbose = true;
 
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
-	OpenSSL_add_all_ciphers();
-
 	ret = pkg_emit_sandbox_call(mldsa_verify_cert_cb, fd, &cbdata);
 	if (need_close)
 		close(fd);
@@ -214,6 +213,7 @@ mldsa_verify_cert(const struct pkgsign_ctx *sctx __unused, unsigned char *key,
 static int
 mldsa_verify_cb(int fd, void *ud)
 {
+#if 0
 	struct mldsa_verify_cbdata *cbdata = ud;
 	char *sha512;
 	char errbuf[1024];
@@ -282,6 +282,7 @@ mldsa_verify_cb(int fd, void *ud)
 	EVP_PKEY_CTX_free(ctx);
 	EVP_PKEY_free(pkey);
 
+#endif /* 0 */
 	return (EPKG_OK);
 }
 
@@ -317,10 +318,6 @@ mldsa_verify(const struct pkgsign_ctx *sctx __unused, const char *keypath,
 	cbdata.siglen = sig_len;
 	cbdata.verbose = false;
 
-	SSL_load_error_strings();
-	OpenSSL_add_all_algorithms();
-	OpenSSL_add_all_ciphers();
-
 	ret = pkg_emit_sandbox_call(mldsa_verify_cert_cb, fd, &cbdata);
 	if (need_close)
 		close(fd);
@@ -341,46 +338,38 @@ mldsa_sign_data(struct pkgsign_ctx *sctx, const unsigned char *msg, size_t msgsz
 {
 	char errbuf[1024];
 	struct mldsa_sign_ctx *keyinfo = MLDSA_CTX(sctx);
-	int max_len = 0, ret;
+	int ret;
 	EVP_PKEY_CTX *ctx;
-	const EVP_MD *md;
-
-	md = EVP_sha512();
-	char *hash;
+	EVP_SIGNATURE *sig_alg;
 
 	if (keyinfo->key == NULL && _load_private_key(keyinfo) != EPKG_OK) {
 		pkg_emit_error("can't load key from %s", keyinfo->sctx.path);
 		return (EPKG_FATAL);
 	}
 
-	max_len = EVP_PKEY_size(keyinfo->key);
-	*sigret = xcalloc(1, max_len + 1);
-
-	ctx = EVP_PKEY_CTX_new(keyinfo->key, NULL);
+	ctx = EVP_PKEY_CTX_new_from_pkey(NULL, keyinfo->key, NULL);
 	if (ctx == NULL)
 		return (EPKG_FATAL);
 
-	if (EVP_PKEY_sign_init(ctx) <= 0) {
+	/* Specifying the algo here ensures we are using ML-DSA-87 */
+	sig_alg = EVP_SIGNATURE_fetch(NULL, "ML-DSA-87", NULL);
+	if (sig_alg == NULL)
+		return (EPKG_FATAL);
+
+	if (EVP_PKEY_sign_message_init(ctx, sig_alg, NULL) <= 0) {
 		EVP_PKEY_CTX_free(ctx);
 		return (EPKG_FATAL);
 	}
 
-	if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0) {
+	/* Determine buffer length */
+	if (EVP_PKEY_sign(ctx, NULL, siglen, msg, msgsz) <= 0) {
 		EVP_PKEY_CTX_free(ctx);
 		return (EPKG_FATAL);
 	}
+	*sigret = xcalloc(1, *siglen);
 
-	if (EVP_PKEY_CTX_set_signature_md(ctx, md) <= 0) {
-		EVP_PKEY_CTX_free(ctx);
-		return (EPKG_FATAL);
-	}
-
-	*siglen = max_len;
-	hash = pkg_checksum_data(msg, msgsz, PKG_HASH_TYPE_SHA512_RAW);
-	ret = EVP_PKEY_sign(ctx, *sigret, siglen, hash,
-	    EVP_MD_size(md));
-	free(hash);
-
+	/* Now do the signing */
+	ret = EVP_PKEY_sign(ctx, *sigret, siglen, msg, msgsz);
 	if (ret <= 0) {
 		pkg_dbg(PKG_DBG_VERIFY, 1, "%s: %s", keyinfo->sctx.path,
 		   ERR_error_string(ERR_get_error(), errbuf));
@@ -391,7 +380,6 @@ mldsa_sign_data(struct pkgsign_ctx *sctx, const unsigned char *msg, size_t msgsz
 
 	assert(*siglen < INT_MAX);
 	EVP_PKEY_CTX_free(ctx);
-	*siglen += 1;
 	return (EPKG_OK);
 }
 
@@ -412,6 +400,8 @@ mldsa_sign(struct pkgsign_ctx *sctx, const char *path, unsigned char **sigret,
 	if (sha512 == NULL)
 		return (EPKG_FATAL);
 
+	pkg_dbg(PKG_DBG_VERIFY, 1, "sign file=%s sha512=%s", path, sha512);
+
 	ret = mldsa_sign_data(sctx, sha512, strlen(sha512), sigret, siglen);
 
 	free(sha512);
@@ -423,6 +413,7 @@ static int
 mldsa_generate(struct pkgsign_ctx *sctx, const struct iovec *iov __unused,
     int niov __unused)
 {
+#if 0
 	char errbuf[1024];
 	struct mldsa_sign_ctx *keyinfo = MLDSA_CTX(sctx);
 	const char *path = sctx->path;
@@ -481,6 +472,9 @@ out:
 	fclose(fp);
 	EVP_PKEY_CTX_free(ctx);
 	return (rc);
+#else
+	return(EPKG_OK);
+#endif
 }
 
 static int
@@ -519,11 +513,6 @@ mldsa_pubkey(struct pkgsign_ctx *sctx, char **pubkey, size_t *pubkeylen)
 static int
 mldsa_new(const char *name __unused, struct pkgsign_ctx *sctx __unused)
 {
-
-	SSL_load_error_strings();
-
-	OpenSSL_add_all_algorithms();
-	OpenSSL_add_all_ciphers();
 
 	return (0);
 }

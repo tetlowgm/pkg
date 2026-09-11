@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <openssl/opensslv.h>
+
 #include "private/pkg.h"
 #include "private/pkgsign.h"
 #include "hash.h"
