@@ -30,15 +30,6 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
-
-#if __has_include(<readpassphrase.h>)
-#include <readpassphrase.h>
-#elif __has_include(<bsd/readpassphrase.h>)
-#include <bsd/readpassphrase.h>
-#else
-#include "readpassphrase_compat.h"
-#endif
-
 #include <unistd.h>
 
 #include <pkg.h>
