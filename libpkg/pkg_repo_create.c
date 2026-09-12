@@ -610,9 +610,38 @@ pkg_repo_create_set_metafile(struct pkg_repo_create *prc, const char *metafile)
 void
 pkg_repo_create_set_sign(struct pkg_repo_create *prc, char **argv, int argc, pkg_password_cb *cb)
 {
-	prc->sign.argc = argc;
-	prc->sign.argv = argv;
-	prc->sign.cb = cb;
+	int	 i;
+	char	*cpos;
+	sb_t	 cmd = sb_init();
+
+	pkg_debug(1, "Got call to legacy signing option");
+
+	pkg_repo_create_set_password_cb(prc, cb);
+
+	/* Legacy calling convention for signing. Convert to new style. */
+	if (argv == 1) {
+		/* Should be rsa:path/to/key.pem */
+		if ((cpos = strchr(argv[0], ':')) == NULL) {
+			/* No type detected, assume "rsa" */
+			pkg_repo_create_set_signtype(prc, "rsa");
+			pkg_repo_create_set_signkey(prc, argv[0]);
+		} else {
+			cpos[0] = '\0';
+			pkg_repo_create_set_signtype(prc, argv[0]);
+			pkg_repo_create_set_signkey(prc, cpos + 1);
+		}
+	} else if (argc > 2) {
+		/* Should be "signing_command: sign.sh arg arg" */
+		if (STREQ(argv[0], "signing_command:")) {
+			for (i = 1; i < argc; i++) {
+				if (strspn(argv[i], " \t\n") > 0)
+					sb_printf(&cmd, " \"%s\" ", argv[i]);
+				else
+					sb_printf(&cmd, " %s ", argv[i]);
+			}
+			pkg_repo_create_set_signcmd(prc, sb_str(&cmd));
+		}
+	}
 }
 
 void
