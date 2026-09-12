@@ -615,6 +615,24 @@ pkg_repo_create_set_sign(struct pkg_repo_create *prc, char **argv, int argc, pkg
 	prc->sign.cb = cb;
 }
 
+void
+pkg_repo_create_set_signtype(struct pkg_repo_create *prc, const char *signtype)
+{
+	prc->sign.type = signtype;
+}
+
+void
+pkg_repo_create_set_signcmd(struct pkg_repo_create *prc, const char *signcmd)
+{
+	prc->sign.cmd = signcmd;
+}
+
+void
+pkg_repo_create_set_signkey(struct pkg_repo_create *prc, const char *signkey)
+{
+	prc->sign.key = signkey;
+}
+
 static int
 pkg_repo_create_pack_and_sign(struct pkg_repo_create *prc)
 {
