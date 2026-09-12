@@ -616,6 +616,12 @@ pkg_repo_create_set_sign(struct pkg_repo_create *prc, char **argv, int argc, pkg
 }
 
 void
+pkg_repo_create_set_password_cb(struct pkg_repo_create *prc, pkg_password_cb *cb)
+{
+	prc->sign.cb = cb;
+}
+
+void
 pkg_repo_create_set_signtype(struct pkg_repo_create *prc, const char *signtype)
 {
 	prc->sign.type = signtype;
