@@ -26,7 +26,7 @@ VPATH=	$(top_srcdir)/scripts
 all: $(PDAILY) $(PSECURITY) $(PWEEKLY) $(COMPLETION)
 
 clean:
-	rm -f $(PDAILY) $(PSECURITY) $(PWEEKLY)
+	rm -f $(PDAILY) $(PSECURITY) $(PWEEKLY) $(COMPLETION)
 
 install: $(PDAILY) $(PSECURITY) $(PWEEKLY) $(COMPLETION)
 	install -d -m 755 $(DESTDIR)$(pdailydir)

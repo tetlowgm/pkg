@@ -1,6 +1,8 @@
 include @builddir@/mk/defs.mk
 DIRS=	@REPOS@
 
+CLEAN_FILES+=	pkg_repos.h
+
 all: pkg_repos.h
 
 pkg_repos.h: $(DIRS)

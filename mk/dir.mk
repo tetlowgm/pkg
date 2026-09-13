@@ -9,6 +9,7 @@ install:
 	done
 
 clean:
+	rm -f $(CLEAN_FILES)
 	@set -e; for d in $(DIRS); do \
 		$(MAKE) -C $$d clean ; \
 	done
