@@ -6,6 +6,37 @@ DIRS+=	tests
 
 DISTNAME=	$(PACKAGE_NAME)-$(VERSION)
 
+DISTCLEAN_FILES=	Makefile \
+			compat/Makefile \
+			config.log \
+			configure_call \
+			docs/Makefile \
+			external/Makefile \
+			external/libblake2/Makefile \
+			external/libder/Makefile \
+			external/libecc/Makefile \
+			external/libelf/Makefile \
+			external/libfetch/Makefile \
+			external/liblinenoise/Makefile \
+			external/liblua/Makefile \
+			external/libpicosat/Makefile \
+			external/libsqlite/Makefile \
+			external/libsqlite/sqlite_generated.h \
+			external/libucl/Makefile \
+			external/libyxml/Makefile \
+			libpkg/Makefile \
+			libpkg/pkg.h \
+			libpkg/pkg.pc \
+			libpkg/repo/Makefile \
+			libpkg/repo/binary/Makefile \
+			mk/defs.mk \
+			pkg_config.h \
+			scripts/Makefile \
+			src/Makefile \
+			tests/Makefile \
+			tests/frontend/test_environment.sh \
+			tests/fuzz/Makefile
+
 include $(MK)/dir.mk
 include $(MK)/common.mk
 

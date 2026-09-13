@@ -83,6 +83,7 @@ scripts/sbin/pkg2ng
 /scripts/Makefile
 /src/Makefile
 /tests/Makefile
+/tests/fuzz/Makefile
 /mk/defs.mk
 /tests/Kyuafile
 /tests/checksum

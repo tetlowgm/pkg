@@ -122,7 +122,7 @@ STATIC_LIBS=	@REPOS_STATIC_LIBS@ \
 		$(top_builddir)/external/libfetch/libfetch.a \
 		lib$(LIB).a
 
-CLEAN_FILES+=	mergelib_script
+CLEAN_FILES+=	mergelib_script lib$(LIB)_flat.a
 
 @if HAVE_LIBUTIL
 LOCAL_LDFLAGS+=	-lutil
