@@ -156,7 +156,7 @@ mldsa_verify_cb(int fd, void *ud)
 	}
 
 	ret = EVP_PKEY_verify(ctx, cbdata->sig, cbdata->siglen, sha512,
-	    pkg_checksum_type_size(PKG_HASH_TYPE_SHA512_HEX));
+	    pkg_checksum_type_size(PKG_HASH_TYPE_SHA512_HEX) - 1);
 	free(sha512);
 	if (ret <= 0) {
 		if (ret < 0)
@@ -407,6 +407,13 @@ mldsa_pubkey(struct pkgsign_ctx *sctx, char **pubkey, size_t *pubkeylen)
 	return (EPKG_OK);
 }
 
+static pkg_checksum_type_t
+mldsa_get_digest(struct pkgsign_ctx *sctx __unused)
+{
+
+	return(PKG_HASH_TYPE_SHA512_HEX);
+}
+
 static int
 mldsa_new(const char *name __unused, struct pkgsign_ctx *sctx __unused)
 {
@@ -437,5 +444,7 @@ const struct pkgsign_ops pkgsign_mldsa = {
 	.pkgsign_generate = mldsa_generate,
 	.pkgsign_pubkey = mldsa_pubkey,
 	.pkgsign_sign_data = mldsa_sign_data,
+
+	.pkgsign_get_digest = mldsa_get_digest,
 };
 #endif	/* OPENSSL_VERSION_NUMBER >= 0x30500000L */
