@@ -164,6 +164,7 @@ exec_repo(int argc, char **argv)
 			}
 			pkg_repo_create_set_signcmd(prc, sb_str(&cmd));
 		} else {
+			sb_fini(&cmd);
 			pkg_repo_create_free(prc);
 			usage_repo();
 			return (EXIT_FAILURE);
@@ -172,10 +173,12 @@ exec_repo(int argc, char **argv)
 
 	if (pkg_repo_create(prc, argv[0]) != EPKG_OK) {
 		printf("Cannot create repository catalogue\n");
+		sb_fini(&cmd);
 		pkg_repo_create_free(prc);
 		return (EXIT_FAILURE);
 	}
 
+	sb_fini(&cmd);
 	pkg_repo_create_free(prc);
 	return (EXIT_SUCCESS);
 }
